@@ -1,23 +1,4 @@
 ---
-- name: remove sources.list
-  file:
-    path: "/etc/apt/sources.list"
-    state: absent
-
-- name: remove sources.list.d
-  file:
-    path: "/etc/apt/sources.list.d"
-    state: absent
-
-- name: update sources.list
-  copy:
-    src: "files/sources.list"
-    dest: "/etc/apt/sources.list"
-    owner: root
-    group: root
-    mode: 0644
-    force: yes
-
 - name: Install required packages
   apt:
     update_cache: yes
@@ -27,8 +8,8 @@
       - gnupg
     state: present
 
-- name: Load aufs module
-  shell: modprobe aufs
+- name: Load overlay module
+  shell: modprobe overlay
 
 # ---- Set up the specified ISO release ----
 
@@ -127,6 +108,11 @@
     path: "{{ WRITE_ROOT }}/boot/{{ version_string.stdout }}/work/work"
     state: directory
 
+- name: Create the install root {{ INSTALL_ROOT }}
+  file:
+    path: "{{ INSTALL_ROOT }}"
+    state: directory
+
 - name: Copy squashfs image from ISO to root partition
   command: cp -p {{ SQUASHFS_IMAGE }} {{ WRITE_ROOT }}/boot/{{ version_string.stdout }}/{{ version_string.stdout }}.squashfs
   args:
@@ -149,8 +135,8 @@
   mount:
     name: "{{ INSTALL_ROOT }}"
     src: none
-    fstype: aufs
-    opts: "noatime,dirs={{ RW_DIR.path }}=rw:{{ READ_ROOT }}=rr"
+    fstype: overlay
+    opts: "noatime,lowerdir={{ READ_ROOT }},upperdir={{ RW_DIR.path }},workdir={{ WRITE_ROOT }}/boot/{{ version_string.stdout }}/work/work"
     state: mounted
 
 # ---- Post image installation tasks ----
@@ -222,8 +208,8 @@
 - name: Unmount {{ INSTALL_ROOT }}
   mount:
     name: "{{ INSTALL_ROOT }}"
-    src: overlayfs
-    fstype: overlayfs
+    src: overlay
+    fstype: overlay
     state: unmounted
 
 - name: Unmount {{ READ_ROOT }}
